@@ -45,13 +45,16 @@ Next_simbol:
         je exit
         cmp byte [rax], '%'
         je spesificator
-        jmp _print_char
+        jmp _print_standart_char
+        ;jmp Next_simbol
 
 spesificator:
         inc rax
         cmp byte [rax], '%'
-        je _print_char
-        push rax
+        je _print_standart_char
+        jmp _print_char
+
+        push rax                ;choose func in jump table
         xor rdx, rdx
         mov rdx, jump_table
         mov rax, [rax]
@@ -61,20 +64,42 @@ spesificator:
         add rdx, 8
         pop rax
 
-        mov rdx, [rdx]
-        inc rcx
+        mov rdx, [rdx]  ;call function
+        jmp rdx
+
+        inc rcx         ;shift stack
         add rbx, 8
+        inc rax         ;next simbol
+        jmp Next_simbol
+
 
 ;----------------------------------------------------------------------------
 ;Print standart char
 ;DAMEGED: AX
 ;============================================================================
-_print_char:
+_print_standart_char:
         push rax
         mov rax, [rax]
         call _print_simbol
         pop rax
         inc rax
+        jmp Next_simbol
+;============================================================================
+
+;----------------------------------------------------------------------------
+;Print %c
+;DAMEGED: AX
+;============================================================================
+_print_char:
+        push rax
+        mov rax, [rsp + rbx]
+        call _print_simbol
+        pop rax
+        inc rax
+
+        inc rcx         ;shift stack
+        add rbx, 8
+        ;inc rax         ;next simbol
         jmp Next_simbol
 ;============================================================================
 
