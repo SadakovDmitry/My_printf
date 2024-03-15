@@ -1,12 +1,11 @@
-;format macho64
 
-;extrn printf
 global my_printf
 
 section     .text
 
-;section printf executable
+
 global _my_printf
+
 ;----------------------------------------------------------------------------
 ;Call my_printf
 ;============================================================================
@@ -40,7 +39,7 @@ _read_args:
         mov rbx, 32
         xor rcx, rcx
 
-Next_simbol:
+Next_symbol:
         cmp [rax], byte 0
         je exit
         cmp byte [rax], '%'
@@ -59,23 +58,18 @@ spesificator:
         add rdx, r15
         jmp [rdx]
 
-        inc rcx         ;shift stack
-        add rbx, 8
-        inc rax         ;next simbol
-        jmp Next_simbol
-
 
 ;----------------------------------------------------------------------------
 ;Print standart char
-;DAMEGED: AX
+;DAMEGED: RAX = pointer to char symbol
 ;============================================================================
 _print_standart_char:
         push rax
         mov rax, [rax]
-        call _print_simbol
+        call _print_symbol
         pop rax
         inc rax
-        jmp Next_simbol
+        jmp Next_symbol
 ;============================================================================
 
 ;----------------------------------------------------------------------------
@@ -85,22 +79,180 @@ _print_standart_char:
 _print_char:
         push rax
         mov rax, [rsp + rbx]
-        call _print_simbol
+        call _print_symbol
         pop rax
         inc rax
 
         inc rcx         ;shift stack
         add rbx, 8
-        jmp Next_simbol
+        jmp Next_symbol
 ;============================================================================
 
-_print_binary_num:
-_print_dec_num:
-_print_oct_dec:
+;----------------------------------------------------------------------------
+;Print %s
+;DAMEGED: RAX, RDX
+;============================================================================
 _print_str:
-_print_hex_dec:
+        push rax
+        mov rdx, [rsp + rbx]
 
-_print_simbol:
+Next_symbol_in_str:
+        cmp [rdx], byte 0
+        je end_str
+        mov rax, [rdx]
+        call _print_symbol
+        inc rdx
+        jmp Next_symbol_in_str
+        end_str:
+
+        pop rax
+        inc rax
+
+        inc rcx         ;shift stack
+        add rbx, 8
+        jmp Next_symbol
+;============================================================================
+
+
+;----------------------------------------------------------------------------
+;Print num
+;DAMEGED: RAX, RDX, R12, R11
+;IN:    RAX = number
+;       R10 = sistem count
+;============================================================================
+_print_num:
+        push rax
+        push rbx
+        push rcx
+        push rdx
+
+        xor rcx, rcx
+        xor rbx, rbx
+        mov r11, simbols
+        mov rbx, end_buf
+        cmp rax, 2147483647
+        jb without_minus
+
+        neg eax
+        push rax
+        mov rax, '-'
+        call _print_symbol
+        pop rax
+
+without_minus:
+
+while_not_zero:
+        xor rdx, rdx
+        div r10
+        add rdx, r11
+        dec rbx
+        mov byte r12b, [rdx]
+        mov byte [rbx], r12b
+        inc rcx
+
+        cmp rax, 0
+        jne while_not_zero
+
+
+
+        mov rax, 0x2000004 ; write64bsd (rdi, rsi, rdx) ... r10, r8, r9
+        mov rdi, 1         ; stdout
+        mov rsi, rbx
+        mov rdx, rcx       ; strlen
+        syscall            ;print number
+
+
+        pop rdx
+        pop rcx
+        pop rbx
+        pop rax
+        ret
+;============================================================================
+
+
+;----------------------------------------------------------------------------
+;Print %b
+;DAMEGED: RAX, RDX, R12, R11
+;IN:    RAX = number
+;============================================================================
+_print_binary_num:
+        push rax
+        mov r10, 2
+        mov rax, [rsp + rbx]
+        call _print_num
+        pop rax
+        inc rax
+
+        inc rcx         ;shift stack
+        add rbx, 8
+        jmp Next_symbol
+;============================================================================
+
+
+;----------------------------------------------------------------------------
+;Print %o
+;DAMEGED: RAX, RDX, R12, R11
+;IN:    RAX = number
+;============================================================================
+_print_oct_dec:
+        push rax
+        mov r10, 8
+        mov rax, [rsp + rbx]
+        call _print_num
+        pop rax
+        inc rax
+
+        inc rcx         ;shift stack
+        add rbx, 8
+        jmp Next_symbol
+;============================================================================
+
+
+
+;----------------------------------------------------------------------------
+;Print %x
+;DAMEGED: RAX, RDX, R12, R11
+;IN:    RAX = number
+;============================================================================
+_print_hex_dec:
+        push rax
+        mov r10, 16
+        mov rax, [rsp + rbx]
+        call _print_num
+        pop rax
+        inc rax
+
+        inc rcx         ;shift stack
+        add rbx, 8
+        jmp Next_symbol
+;============================================================================
+
+
+;----------------------------------------------------------------------------
+;Print %d
+;DAMEGED: RAX, RDX, R12, R11
+;IN:    RAX = number
+;============================================================================
+_print_dec_num:
+        push rax
+        mov r10, 10
+        mov rax, [rsp + rbx]
+        call _print_num
+        pop rax
+        inc rax
+
+        inc rcx         ;shift stack
+        add rbx, 8
+        jmp Next_symbol
+;============================================================================
+
+
+;----------------------------------------------------------------------------
+;Print symbol
+;DAMEGED: None
+;IN:    RAX = ASCII code symbol
+;============================================================================
+_print_symbol:
         push rax
         push rdx
         push rsi
@@ -112,7 +264,12 @@ _print_simbol:
         mov rdi, 1         ; stdout
         mov rsi, rsp
         mov rdx, 1         ; strlen
+
+        push rcx
+        push r11
         syscall
+        pop r11
+        pop rcx
 
         pop rax
 
@@ -121,18 +278,27 @@ _print_simbol:
         pop rdx
         pop rax
         ret
+;============================================================================
 
+;----------------------------------------------------------------------------
+;EXIT
+;============================================================================
 exit:
         pop rcx
         pop rbx
         mov rax, 0x2000001
         xor rdi, rdi
         syscall
-
+;============================================================================
 
 
 
 section     .data
+
+simbols     db '0123456789ABCDEF'
+value_buf   db 100 dup('0')
+end_buf     db 0
+negg        db '-'
 
 jump_table  dq _print_binary_num
             dq _print_char
