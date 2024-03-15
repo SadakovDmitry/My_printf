@@ -1,8 +1,6 @@
-
 global my_printf
 
 section     .text
-
 
 global _my_printf
 
@@ -12,20 +10,25 @@ global _my_printf
 _my_printf:
         pop r10
 
-        push r9
-        push r8
-        push rcx
-        push rdx
-        push rsi
+        push r9                 ;--------------------------------------------
+        push r8                 ;>
+        push rcx                ;>>>   Save r9, r8, rcx, rdx, rbp
+        push rdx                ;>>
+        push rsi                ;>
+        push rbp                ;--------------------------------------------
+
+        mov rbp, rsp
+        add rbp, 8             ; +rbp, +r10
 
         mov rax, rdi
         call _read_args
 
-        pop rsi
-        pop rdx
-        pop rcx
-        pop r8
-        pop r9
+        pop rbp                 ;--------------------------------------------
+        pop rsi                 ;>
+        pop rdx                 ;>>
+        pop rcx                 ;>>>  Recover r9, r8, rcx, rdx, rbp
+        pop r8                  ;>
+        pop r9                  ;--------------------------------------------
 
         push r10
         ret
@@ -36,7 +39,8 @@ _read_args:
         push rbx
         push rcx
 
-        mov rbx, 32
+        ;mov rbx, 40
+        xor rbx, rbx
         xor rcx, rcx
 
 Next_symbol:
@@ -46,17 +50,33 @@ Next_symbol:
         je spesificator
         jmp _print_standart_char
 
-spesificator:
-        inc rax
-        xor r15, r15
-        mov byte r15b, [rax]
-        cmp r15b, '%'
-        je _print_standart_char
 
-        lea rdx, [(r15 - 'b') * 8]  ;choose func in jump table
-        mov r15, jump_table
-        add rdx, r15
-        jmp [rdx]
+;----------------------------------------------------------------------------
+;Jmp to func in jump table
+;IN: RAX = pointer to char symbol after '%'
+;DAMAGED = R15
+;============================================================================
+spesificator:
+        inc rax                     ;skip '%'
+        xor r15, r15
+        mov byte r15b, [rax]        ; r15b = [rax]
+        cmp r15b, '%'               ; if rax = '%'
+        je _print_standart_char     ; print '%'
+
+        push rax
+        mov rax, [rbp + rbx * 8]    ; rax = new argument
+        inc rbx                     ; next argument
+
+        lea rdx, [(r15 - 'b') * 8]  ;----------------------------------------
+        mov r15, jump_table         ;>
+        add rdx, r15                ;>>   jmp to correct functin in jmp_table
+        call [rdx]                  ;----------------------------------------
+
+        pop rax
+        inc rax                     ;next symbol
+
+        jmp Next_symbol
+;============================================================================
 
 
 ;----------------------------------------------------------------------------
@@ -74,18 +94,11 @@ _print_standart_char:
 
 ;----------------------------------------------------------------------------
 ;Print %c
-;DAMEGED: AX
+;DAMEGED: RAX = arg
 ;============================================================================
 _print_char:
-        push rax
-        mov rax, [rsp + rbx]
         call _print_symbol
-        pop rax
-        inc rax
-
-        inc rcx         ;shift stack
-        add rbx, 8
-        jmp Next_symbol
+        ret
 ;============================================================================
 
 ;----------------------------------------------------------------------------
@@ -93,8 +106,7 @@ _print_char:
 ;DAMEGED: RAX, RDX
 ;============================================================================
 _print_str:
-        push rax
-        mov rdx, [rsp + rbx]
+        mov rdx, rax
 
 Next_symbol_in_str:
         cmp [rdx], byte 0
@@ -105,12 +117,7 @@ Next_symbol_in_str:
         jmp Next_symbol_in_str
         end_str:
 
-        pop rax
-        inc rax
-
-        inc rcx         ;shift stack
-        add rbx, 8
-        jmp Next_symbol
+        ret
 ;============================================================================
 
 
@@ -153,13 +160,11 @@ while_not_zero:
         cmp rax, 0
         jne while_not_zero
 
-
-
         mov rax, 0x2000004 ; write64bsd (rdi, rsi, rdx) ... r10, r8, r9
         mov rdi, 1         ; stdout
         mov rsi, rbx
         mov rdx, rcx       ; strlen
-        syscall            ;print number
+        syscall            ; print number
 
 
         pop rdx
@@ -173,19 +178,12 @@ while_not_zero:
 ;----------------------------------------------------------------------------
 ;Print %b
 ;DAMEGED: RAX, RDX, R12, R11
-;IN:    RAX = number
+;IN:    RAX = argument
 ;============================================================================
 _print_binary_num:
-        push rax
         mov r10, 2
-        mov rax, [rsp + rbx]
         call _print_num
-        pop rax
-        inc rax
-
-        inc rcx         ;shift stack
-        add rbx, 8
-        jmp Next_symbol
+        ret
 ;============================================================================
 
 
@@ -195,16 +193,9 @@ _print_binary_num:
 ;IN:    RAX = number
 ;============================================================================
 _print_oct_dec:
-        push rax
         mov r10, 8
-        mov rax, [rsp + rbx]
         call _print_num
-        pop rax
-        inc rax
-
-        inc rcx         ;shift stack
-        add rbx, 8
-        jmp Next_symbol
+        ret
 ;============================================================================
 
 
@@ -215,16 +206,9 @@ _print_oct_dec:
 ;IN:    RAX = number
 ;============================================================================
 _print_hex_dec:
-        push rax
         mov r10, 16
-        mov rax, [rsp + rbx]
         call _print_num
-        pop rax
-        inc rax
-
-        inc rcx         ;shift stack
-        add rbx, 8
-        jmp Next_symbol
+        ret
 ;============================================================================
 
 
@@ -234,16 +218,9 @@ _print_hex_dec:
 ;IN:    RAX = number
 ;============================================================================
 _print_dec_num:
-        push rax
         mov r10, 10
-        mov rax, [rsp + rbx]
         call _print_num
-        pop rax
-        inc rax
-
-        inc rcx         ;shift stack
-        add rbx, 8
-        jmp Next_symbol
+        ret
 ;============================================================================
 
 
