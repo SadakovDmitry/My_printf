@@ -46,26 +46,18 @@ Next_simbol:
         cmp byte [rax], '%'
         je spesificator
         jmp _print_standart_char
-        ;jmp Next_simbol
 
 spesificator:
         inc rax
-        cmp byte [rax], '%'
+        xor r15, r15
+        mov byte r15b, [rax]
+        cmp r15b, '%'
         je _print_standart_char
-        jmp _print_char
 
-        push rax                ;choose func in jump table
-        xor rdx, rdx
-        mov rdx, jump_table
-        mov rax, [rax]
-        mov r15, 8
-        mul r15
-        add rdx, rax
-        add rdx, 8
-        pop rax
-
-        mov rdx, [rdx]  ;call function
-        jmp rdx
+        lea rdx, [(r15 - 'b') * 8]  ;choose func in jump table
+        mov r15, jump_table
+        add rdx, r15
+        jmp [rdx]
 
         inc rcx         ;shift stack
         add rbx, 8
@@ -99,7 +91,6 @@ _print_char:
 
         inc rcx         ;shift stack
         add rbx, 8
-        ;inc rax         ;next simbol
         jmp Next_simbol
 ;============================================================================
 
@@ -146,9 +137,9 @@ section     .data
 jump_table  dq _print_binary_num
             dq _print_char
             dq _print_dec_num
-            dq 'o' - 'd' - 1 dup(_print_simbol)
+            dq 'o' - 'd' - 1 dup(_print_standart_char)
             dq _print_oct_dec
-            dq 's' - 'o' - 1 dup(_print_simbol)
+            dq 's' - 'o' - 1 dup(_print_standart_char)
             dq _print_str
-            dq 'x' - 's' - 1 dup(_print_simbol)
+            dq 'x' - 's' - 1 dup(_print_standart_char)
             dq _print_hex_dec
