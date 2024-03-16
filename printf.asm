@@ -8,62 +8,69 @@ global _my_printf
 ;Call my_printf
 ;============================================================================
 _my_printf:
-        pop r10
+        pop r11                 ; r11 = ret adress
 
         push r9                 ;--------------------------------------------
         push r8                 ;>
-        push rcx                ;>>>   Save r9, r8, rcx, rdx, rbp
+        push rcx                ;>>>   Push arguments
         push rdx                ;>>
-        push rsi                ;>
+        push rsi                ;--------------------------------------------
         push rbp                ;--------------------------------------------
+        push r15                ;>
+        push r12                ;>>   Save r11, r12, r15, rbp
+        push r11                ;--------------------------------------------
 
         mov rbp, rsp
-        add rbp, 8             ; +rbp, +r10
+        add rbp, 32              ; skip rbp, r
 
-        mov rax, rdi
+        mov rax, rdi            ; rax = pointer to format str
         call _read_args
 
-        pop rbp                 ;--------------------------------------------
-        pop rsi                 ;>
-        pop rdx                 ;>>
-        pop rcx                 ;>>>  Recover r9, r8, rcx, rdx, rbp
-        pop r8                  ;>
-        pop r9                  ;--------------------------------------------
+        push r11                ;--------------------------------------------
+        push r12                ;>
+        push r15                ;>>   Recover r11, r12, r15, rbp
+        push rbp                ;--------------------------------------------
+        add rsp, 40             ; skip r9, r8, rcx, rdx, rsi
 
-        push r10
-        ret
+        jmp r11                 ; ret
 ;============================================================================
 
 
+;----------------------------------------------------------------------------
+;Print Arguments
+;IN: RAX = pointer to start format string
+;DAMAGED: NONE
+;============================================================================
 _read_args:
         push rbx
-        push rcx
-
-        ;mov rbx, 40
-        xor rbx, rbx
-        xor rcx, rcx
+        xor rbx, rbx            ;zero arg
 
 Next_symbol:
         cmp [rax], byte 0
-        je exit
+        je Stop
         cmp byte [rax], '%'
-        je spesificator
+        je _print_spesificator
         jmp _print_standart_char
+
+Stop:
+        pop rbx
+        ret
+;============================================================================
 
 
 ;----------------------------------------------------------------------------
 ;Jmp to func in jump table
 ;IN: RAX = pointer to char symbol after '%'
-;DAMAGED = R15
+;DAMAGED = R15, RAX
 ;============================================================================
-spesificator:
-        inc rax                     ;skip '%'
+_print_spesificator:
+        inc rax                     ; skip '%'
         xor r15, r15
         mov byte r15b, [rax]        ; r15b = [rax]
         cmp r15b, '%'               ; if rax = '%'
         je _print_standart_char     ; print '%'
 
-        push rax
+        push rax                    ; save rax
         mov rax, [rbp + rbx * 8]    ; rax = new argument
         inc rbx                     ; next argument
 
@@ -72,8 +79,8 @@ spesificator:
         add rdx, r15                ;>>   jmp to correct functin in jmp_table
         call [rdx]                  ;----------------------------------------
 
-        pop rax
-        inc rax                     ;next symbol
+        pop rax                     ; reload rax
+        inc rax                     ; next symbol
 
         jmp Next_symbol
 ;============================================================================
@@ -81,7 +88,8 @@ spesificator:
 
 ;----------------------------------------------------------------------------
 ;Print standart char
-;DAMEGED: RAX = pointer to char symbol
+;DAMEGED: RAX
+;IN: RAX = pointer to char symbol
 ;============================================================================
 _print_standart_char:
         push rax
@@ -94,7 +102,8 @@ _print_standart_char:
 
 ;----------------------------------------------------------------------------
 ;Print %c
-;DAMEGED: RAX = arg
+;DAMEGED: NONE
+;IN: RAX = registrs
 ;============================================================================
 _print_char:
         call _print_symbol
@@ -120,7 +129,6 @@ Next_symbol_in_str:
         ret
 ;============================================================================
 
-
 ;----------------------------------------------------------------------------
 ;Print num
 ;DAMEGED: RAX, RDX, R12, R11
@@ -128,7 +136,6 @@ Next_symbol_in_str:
 ;       R10 = sistem count
 ;============================================================================
 _print_num:
-        push rax
         push rbx
         push rcx
         push rdx
@@ -137,8 +144,10 @@ _print_num:
         xor rbx, rbx
         mov r11, simbols
         mov rbx, end_buf
-        cmp rax, 2147483647
-        jb without_minus
+
+        mov rdx, rax
+        and rdx, 1 << 31  ;0x80000000
+        je while_not_zero
 
         neg eax
         push rax
@@ -146,31 +155,28 @@ _print_num:
         call _print_symbol
         pop rax
 
-without_minus:
-
 while_not_zero:
         xor rdx, rdx
         div r10
         add rdx, r11
-        dec rbx
-        mov byte r12b, [rdx]
-        mov byte [rbx], r12b
-        inc rcx
+        dec rbx                 ;rdx--
+        mov r12b, [rdx]
+        mov [rbx], r12b         ;set simbol in buf
+        inc rcx                 ;
 
         cmp rax, 0
         jne while_not_zero
 
-        mov rax, 0x2000004 ; write64bsd (rdi, rsi, rdx) ... r10, r8, r9
-        mov rdi, 1         ; stdout
+        mov rax, 0x2000004      ; write64bsd (rdi, rsi, rdx) ... r10, r8, r9
+        mov rdi, 1              ; stdout
         mov rsi, rbx
-        mov rdx, rcx       ; strlen
-        syscall            ; print number
+        mov rdx, rcx            ; strlen
+        syscall                 ; print number
 
 
         pop rdx
         pop rcx
         pop rbx
-        pop rax
         ret
 ;============================================================================
 
@@ -192,7 +198,7 @@ _print_binary_num:
 ;DAMEGED: RAX, RDX, R12, R11
 ;IN:    RAX = number
 ;============================================================================
-_print_oct_dec:
+_print_oct_num:
         mov r10, 8
         call _print_num
         ret
@@ -205,7 +211,7 @@ _print_oct_dec:
 ;DAMEGED: RAX, RDX, R12, R11
 ;IN:    RAX = number
 ;============================================================================
-_print_hex_dec:
+_print_hex_num:
         mov r10, 16
         call _print_num
         ret
@@ -230,7 +236,6 @@ _print_dec_num:
 ;IN:    RAX = ASCII code symbol
 ;============================================================================
 _print_symbol:
-        push rax
         push rdx
         push rsi
         push rdi
@@ -253,36 +258,25 @@ _print_symbol:
         pop rdi
         pop rsi
         pop rdx
-        pop rax
         ret
 ;============================================================================
 
-;----------------------------------------------------------------------------
-;EXIT
-;============================================================================
-exit:
-        pop rcx
-        pop rbx
-        mov rax, 0x2000001
-        xor rdi, rdi
-        syscall
-;============================================================================
 
-
-
-section     .data
+section     .rodata
 
 simbols     db '0123456789ABCDEF'
+start_buf   db 0
 value_buf   db 100 dup('0')
 end_buf     db 0
 negg        db '-'
+output_str  db 500 dup('0')
 
 jump_table  dq _print_binary_num
             dq _print_char
             dq _print_dec_num
             dq 'o' - 'd' - 1 dup(_print_standart_char)
-            dq _print_oct_dec
+            dq _print_oct_num
             dq 's' - 'o' - 1 dup(_print_standart_char)
             dq _print_str
             dq 'x' - 's' - 1 dup(_print_standart_char)
-            dq _print_hex_dec
+            dq _print_hex_num
