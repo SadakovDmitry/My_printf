@@ -1,8 +1,9 @@
-global my_printf
 
 section     .text
 
 global _my_printf
+
+;rsi = pointer to buffer
 
 ;----------------------------------------------------------------------------
 ;Call my_printf
@@ -23,13 +24,16 @@ _my_printf:
         mov rbp, rsp
         add rbp, 32              ; skip rbp, r
 
+        xor rsi, rsi
         mov rax, rdi            ; rax = pointer to format str
+        xor rdi, rdi
         call _read_args
+        call _print_buf
 
-        push r11                ;--------------------------------------------
-        push r12                ;>
-        push r15                ;>>   Recover r11, r12, r15, rbp
-        push rbp                ;--------------------------------------------
+        pop r11                ;--------------------------------------------
+        pop r12                ;>
+        pop r15                ;>>   Recover r11, r12, r15, rbp
+        pop rbp                ;--------------------------------------------
         add rsp, 40             ; skip r9, r8, rcx, rdx, rsi
 
         jmp r11                 ; ret
@@ -167,11 +171,12 @@ while_not_zero:
         cmp rax, 0
         jne while_not_zero
 
-        mov rax, 0x2000004      ; write64bsd (rdi, rsi, rdx) ... r10, r8, r9
-        mov rdi, 1              ; stdout
-        mov rsi, rbx
-        mov rdx, rcx            ; strlen
-        syscall                 ; print number
+Next_num:                       ;-------------------------------------------
+        mov rax, [rbx]          ;>
+        call _print_symbol      ;>> Print number to output_buf
+        inc rdx                 ;>
+        loop Next_num           ;-------------------------------------------
+
 
 
         pop rdx
@@ -236,16 +241,33 @@ _print_dec_num:
 ;IN:    RAX = ASCII code symbol
 ;============================================================================
 _print_symbol:
-        push rdx
-        push rsi
         push rdi
 
+        mov rdi, output_buf
+        add rdi, rsi
+        inc rsi                 ;rsi--
+        mov [rdi], rax          ;set simbol in buf
+
+        pop rdi
+        ret
+;============================================================================
+
+
+;----------------------------------------------------------------------------
+;Print buf
+;IN: NONE
+;DAMAGED: NONE
+;============================================================================
+_print_buf:
+        push rdx
+        push rdi
         push rax
+        push rsi
 
         mov rax, 0x2000004 ; write64bsd (rdi, rsi, rdx) ... r10, r8, r9
         mov rdi, 1         ; stdout
-        mov rsi, rsp
-        mov rdx, 1         ; strlen
+        mov rsi, output_buf
+        mov rdx, [rsp]         ; strlen
 
         push rcx
         push r11
@@ -253,23 +275,27 @@ _print_symbol:
         pop r11
         pop rcx
 
-        pop rax
-
-        pop rdi
         pop rsi
+        pop rax
+        pop rdi
         pop rdx
+
         ret
 ;============================================================================
 
 
+section     .data
+
+start_buf:
+value_buf   db 100 dup('0')
+end_buf:
+output_buf  db 500 dup('0')
+
 section     .rodata
 
 simbols     db '0123456789ABCDEF'
-start_buf   db 0
-value_buf   db 100 dup('0')
-end_buf     db 0
 negg        db '-'
-output_str  db 500 dup('0')
+;output_str  db 500 dup('0')
 
 jump_table  dq _print_binary_num
             dq _print_char
