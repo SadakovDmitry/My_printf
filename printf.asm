@@ -4,6 +4,8 @@ section     .text
 global _my_printf
 
 ;rsi = pointer to buffer
+;nasm -f macho64 printf.asm -o printf.o
+;gcc printf.o main.c -o app -Wl,-no_pie -g
 
 ;----------------------------------------------------------------------------
 ;Call my_printf
@@ -139,25 +141,25 @@ Next_symbol_in_str:
 ;============================================================================
 
 ;----------------------------------------------------------------------------
-;Print num
-;DAMEGED: RAX, RDX, R12, R11
+;Print %d
+;DAMEGED: RAX, R12, R11
 ;IN:    RAX = number
-;       R10 = sistem count
 ;============================================================================
-_print_num:
+_print_dec_num:
         push rbx
         push rcx
         push rdx
 
         xor rcx, rcx
         xor rbx, rbx
+        mov r10, 10
         mov r11, symbols
         mov rbx, end_buf
 
         mov eax, eax
         mov rdx, rax
-        and rdx, sign_bit ;0x80000000 ;1 << 31
-        je while_not_zero
+        and rdx, sign_bit       ;0x80000000 ;1 << 31
+        je while_not_zero_2
 
         neg eax
         push rax
@@ -165,7 +167,7 @@ _print_num:
         call _print_symbol
         pop rax
 
-while_not_zero:
+while_not_zero_2:
         xor rdx, rdx
         div r10
         add rdx, r11            ;rdx = num simbol
@@ -175,13 +177,13 @@ while_not_zero:
         inc rcx                 ;
 
         cmp rax, 0
-        jne while_not_zero
+        jne while_not_zero_2
 
-Next_num:                       ;-------------------------------------------
+Next_num_2:                       ;-------------------------------------------
         mov rax, [rbx]          ;>
         call _print_symbol      ;>> Print number to output_buf
         inc rbx                 ;>
-        loop Next_num           ;-------------------------------------------
+        loop Next_num_2           ;-------------------------------------------
 
 
 
@@ -193,13 +195,64 @@ Next_num:                       ;-------------------------------------------
 
 
 ;----------------------------------------------------------------------------
+;Print %x %o %b
+;DAMEGED: RAX, R10
+;IN:    RAX = number
+;       CL = shift count
+;       R9  = mask
+;============================================================================
+_print_not_dec_num:
+        push rbx
+        push rcx
+        push rdx
+        push r9
+
+        xor r10, r10
+        xor rbx, rbx
+        mov r11, symbols
+        mov rbx, end_buf
+
+while_not_zero:
+        xor rdx, rdx
+        mov rdx, rax            ;rdx = rax
+        shr rax, cl             ;shift number to cl
+        and rdx, r9             ;reset to zero high bits
+        add rdx, r11            ;rdx = num simbol
+        dec rbx                 ;rbx--
+        mov r12b, [rdx]
+        mov [rbx], r12b         ;set symbol in buf
+        inc r10                 ;
+
+        cmp rax, 0
+        jne while_not_zero
+
+        mov rcx, r10
+
+Next_num:                       ;-------------------------------------------
+        mov rax, [rbx]          ;>
+        call _print_symbol      ;>> Print number to output_buf
+        inc rbx                 ;>
+        loop Next_num           ;-------------------------------------------
+
+        pop r9
+        pop rdx
+        pop rcx
+        pop rbx
+
+        ret
+;============================================================================
+
+
+;----------------------------------------------------------------------------
 ;Print %b
 ;DAMEGED: RAX, RDX, R12, R11
 ;IN:    RAX = argument
 ;============================================================================
 _print_binary_num:
-        mov r10, 2
-        call _print_num
+        mov cl, 1
+        mov r9, 1
+
+        call _print_not_dec_num
         ret
 ;============================================================================
 
@@ -210,8 +263,11 @@ _print_binary_num:
 ;IN:    RAX = number
 ;============================================================================
 _print_oct_num:
-        mov r10, 8
-        call _print_num
+
+        mov cl, 3
+        mov r9, 7
+
+        call _print_not_dec_num
         ret
 ;============================================================================
 
@@ -223,20 +279,10 @@ _print_oct_num:
 ;IN:    RAX = number
 ;============================================================================
 _print_hex_num:
-        mov r10, 16
-        call _print_num
-        ret
-;============================================================================
+        mov cl, 4
+        mov r9, 15
 
-
-;----------------------------------------------------------------------------
-;Print %d
-;DAMEGED: RAX, RDX, R12, R11
-;IN:    RAX = number
-;============================================================================
-_print_dec_num:
-        mov r10, 10
-        call _print_num
+        call _print_not_dec_num
         ret
 ;============================================================================
 
