@@ -19,7 +19,7 @@ _my_printf:
         push rbp                ;--------------------------------------------
         push r15                ;>
         push r12                ;>>   Save r11, r12, r15, rbp
-        push r11                ;--------------------------------------------
+        push r11                ;-------------------------------------------- callee caller safe saved
 
         mov rbp, rsp
         add rbp, 32              ; skip rbp, r
@@ -53,8 +53,9 @@ Next_symbol:
         cmp [rax], byte 0
         je Stop
         cmp byte [rax], '%'
-        je _print_spesificator
-        jmp _print_standart_char
+        je _print_spesificator ; specifier
+        call _print_standart_char ; standard std::
+        jmp Next_symbol
 
 Stop:
         pop rbx
@@ -72,7 +73,10 @@ _print_spesificator:
         xor r15, r15
         mov byte r15b, [rax]        ; r15b = [rax]
         cmp r15b, '%'               ; if rax = '%'
-        je _print_standart_char     ; print '%'
+        jne not_percent             ; print '%'
+        call _print_standart_char
+        jmp Next_symbol
+not_percent:
 
         push rax                    ; save rax
         mov rax, [rbp + rbx * 8]    ; rax = new argument
@@ -101,7 +105,8 @@ _print_standart_char:
         call _print_symbol
         pop rax
         inc rax
-        jmp Next_symbol
+        ret
+        ;jmp Next_symbol
 ;============================================================================
 
 ;----------------------------------------------------------------------------
@@ -146,11 +151,12 @@ _print_num:
 
         xor rcx, rcx
         xor rbx, rbx
-        mov r11, simbols
+        mov r11, symbols
         mov rbx, end_buf
 
+        mov eax, eax
         mov rdx, rax
-        and rdx, 1 << 31  ;0x80000000
+        and rdx, sign_bit ;0x80000000 ;1 << 31
         je while_not_zero
 
         neg eax
@@ -162,10 +168,10 @@ _print_num:
 while_not_zero:
         xor rdx, rdx
         div r10
-        add rdx, r11
+        add rdx, r11            ;rdx = num simbol
         dec rbx                 ;rdx--
         mov r12b, [rdx]
-        mov [rbx], r12b         ;set simbol in buf
+        mov [rbx], r12b         ;set symbol in buf
         inc rcx                 ;
 
         cmp rax, 0
@@ -174,7 +180,7 @@ while_not_zero:
 Next_num:                       ;-------------------------------------------
         mov rax, [rbx]          ;>
         call _print_symbol      ;>> Print number to output_buf
-        inc rdx                 ;>
+        inc rbx                 ;>
         loop Next_num           ;-------------------------------------------
 
 
@@ -243,9 +249,14 @@ _print_dec_num:
 _print_symbol:
         push rdi
 
+        cmp rsi, size_buf
+        jne Not_clean
+        call _clean_buf
+Not_clean:
+
         mov rdi, output_buf
         add rdi, rsi
-        inc rsi                 ;rsi--
+        inc rsi                 ;rsi++
         mov [rdi], rax          ;set simbol in buf
 
         pop rdi
@@ -264,10 +275,10 @@ _print_buf:
         push rax
         push rsi
 
-        mov rax, 0x2000004 ; write64bsd (rdi, rsi, rdx) ... r10, r8, r9
-        mov rdi, 1         ; stdout
+        mov rax, 0x2000004      ; write64bsd (rdi, rsi, rdx) ... r10, r8, r9
+        mov rdi, 1              ; stdout
         mov rsi, output_buf
-        mov rdx, [rsp]         ; strlen
+        mov rdx, [rsp]          ; strlen
 
         push rcx
         push r11
@@ -284,18 +295,39 @@ _print_buf:
 ;============================================================================
 
 
+;----------------------------------------------------------------------------
+;Clean buffer
+;IN: RSI = size of buffer
+;DAMAGED: RSI, RCX
+;============================================================================
+_clean_buf:
+        push rax
+        call _print_buf
+
+        mov rcx, size_buf
+        xor rsi, rsi
+Next:                           ;-------------------------------------------
+        mov rax, 0              ;>
+        call _print_symbol      ;>> full buffer by '0'
+        loop Next               ;-------------------------------------------
+        pop rax
+        ret
+;============================================================================
+
+
 section     .data
 
-start_buf:
+start_buf   db 0xb
 value_buf   db 100 dup('0')
-end_buf:
+end_buf     db 0
 output_buf  db 500 dup('0')
 
 section     .rodata
 
-simbols     db '0123456789ABCDEF'
+symbols     db '0123456789ABCDEF'
 negg        db '-'
-;output_str  db 500 dup('0')
+size_buf    equ 500
+sign_bit    equ 0x80000000
 
 jump_table  dq _print_binary_num
             dq _print_char
